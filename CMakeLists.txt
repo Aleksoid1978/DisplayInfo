@@ -36,15 +36,7 @@ if(MSVC)
         )
     endif()
 
-    set(list_of_delay_dlls
-        api-ms-win-shcore-scaling-l1-1-1.dll
-        user32.dll
-    )
-    foreach(dll_name ${list_of_delay_dlls})
-        set(delayload_dlls_list "${delayload_dlls_list} /DELAYLOAD:${dll_name}")
-    endforeach()
-
-    set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "${delayload_dlls_list}")
+    set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/DELAYLOAD:api-ms-win-shcore-scaling-l1-1-1.dll /DELAYLOAD:user32.dll")
     set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR}/$<0:>)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 endif()
