@@ -20,6 +20,11 @@
 
 #pragma once
 
+#ifndef _MSC_VER
+#define WINVER 0x0605
+#define NTDDI_VERSION NTDDI_WINBLUE
+#endif
+
 #include <Windows.h>
 #include <D3d9types.h>
 

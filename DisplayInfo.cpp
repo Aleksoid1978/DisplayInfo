@@ -1,8 +1,10 @@
-#include <iostream>
-#include <map>
+#include "DisplayConfig/DisplayConfig.h"
+
 #include <shellscalingapi.h>
 
-#include "DisplayConfig/DisplayConfig.h"
+#include <iostream>
+#include <map>
+#include <cmath>
 
 static OSVERSIONINFOEXW GetWindowVersion()
 {
@@ -48,10 +50,10 @@ int main()
 {
 	if (SysVersion::IsWin10_1607orLater()) {
 		SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-		EnumDisplayMonitors(nullptr, nullptr, EnumProc, NULL);
+		EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
 	} else if (SysVersion::IsWin81orLater()) {
 		SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-		EnumDisplayMonitors(nullptr, nullptr, EnumProc, NULL);
+		EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
 	}
 
 	std::vector<DisplayConfig_t> displayConfigs;
