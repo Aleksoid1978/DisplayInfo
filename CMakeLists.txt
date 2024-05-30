@@ -22,15 +22,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(MSVC)
-    option(STATIC_MSVC_CRT "Static MSVC runtimes" ON)
-endif()
+option(STATIC_CRT "Static runtime" ON)
 
 add_executable(${PROJECT_NAME} DisplayInfo.cpp "${CMAKE_CURRENT_SOURCE_DIR}/DisplayConfig/DisplayConfig.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE Shcore)
 
 if(MSVC)
-    if(STATIC_MSVC_CRT)
+    if(STATIC_CRT)
         set_target_properties(${PROJECT_NAME} PROPERTIES
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
         )
@@ -39,4 +37,8 @@ if(MSVC)
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/DELAYLOAD:api-ms-win-shcore-scaling-l1-1-1.dll /DELAYLOAD:user32.dll")
     set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_BINARY_DIR}/$<0:>)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+else()
+    if(STATIC_CRT)
+        target_link_options(${PROJECT_NAME} PRIVATE "-static")
+    endif()
 endif()
