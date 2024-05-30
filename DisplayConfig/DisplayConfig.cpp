@@ -170,7 +170,7 @@ std::wstring DisplayConfigToString(const DisplayConfig_t& dc)
 	std::wstring str;
 	if (dc.width && dc.height && dc.refreshRate.Numerator) {
 		double freq = (double)dc.refreshRate.Numerator / (double)dc.refreshRate.Denominator;
-		str = std::format(L"{} {}x{}@{:.3f}", dc.monitorName, dc.width, dc.height, freq);
+		str = std::format(L"{} [{}] {}x{}@{:.3f}", dc.monitorName, dc.displayName, dc.width, dc.height, freq);
 		if (dc.scanLineOrdering >= DISPLAYCONFIG_SCANLINE_ORDERING_INTERLACED) {
 			str += 'i';
 		}
