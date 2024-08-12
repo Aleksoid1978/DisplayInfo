@@ -46,6 +46,9 @@ struct DisplayConfig_t {
 			UINT32 reserved                   :28;
 		};
 		UINT32 value;
+
+		bool HDRSupported() const { return advancedColorSupported && !wideColorEnforced && !advancedColorForceDisabled; }
+		bool HDREnabled() const { return advancedColorEnabled && !wideColorEnforced && !advancedColorForceDisabled; }
 	} advancedColor;
 	DISPLAYCONFIG_RATIONAL                refreshRate;
 	DISPLAYCONFIG_SCANLINE_ORDERING       scanLineOrdering;

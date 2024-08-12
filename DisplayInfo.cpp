@@ -137,9 +137,9 @@ int main()
 				const wchar_t* colenc = ColorEncodingToString(config.colorEncoding);
 				if (colenc) {
 					str = std::format(L"  Color: {} {}-bit", colenc, config.bitsPerChannel);
-					if (config.advancedColor.advancedColorSupported) {
+					if (config.advancedColor.HDRSupported()) {
 						str.append(L", HDR10: ");
-						str.append(config.advancedColor.advancedColorEnabled ? L"on" : L"off");
+						str.append(config.advancedColor.HDREnabled() ? L"on" : L"off");
 
 						str.append(std::format(L"\r\n         Advanced Color : supported - {}, enabled - {}, wide enforced - {}, force disabled - {}",
 											   config.advancedColor.advancedColorSupported, config.advancedColor.advancedColorEnabled,
