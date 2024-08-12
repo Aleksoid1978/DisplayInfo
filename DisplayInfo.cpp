@@ -6,6 +6,14 @@
 #include <map>
 #include <cmath>
 
+#include <dxgi.h>
+#include <dxgi1_6.h>
+
+#include <wrl/client.h>
+using Microsoft::WRL::ComPtr;
+
+#pragma comment(lib, "dxgi.lib")
+
 static OSVERSIONINFOEXW GetWindowVersion()
 {
 	OSVERSIONINFOEXW osInfo = { sizeof(osInfo) };
@@ -31,7 +39,7 @@ namespace SysVersion {
 	}
 }
 
-std::map<std::wstring, long> monitors;
+std::map<std::wstring, std::pair<long, DXGI_COLOR_SPACE_TYPE>> monitors;
 
 static BOOL CALLBACK EnumProc(HMONITOR hMonitor, HDC, LPRECT, LPARAM)
 {
@@ -40,10 +48,47 @@ static BOOL CALLBACK EnumProc(HMONITOR hMonitor, HDC, LPRECT, LPARAM)
 
 	UINT dpiX, dpiY;
 	if (S_OK == GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY)) {
-		monitors.try_emplace(monitorInfoEx.szDevice, std::lround(dpiY * 100. / 96.));
+		monitors.try_emplace(monitorInfoEx.szDevice, std::lround(dpiY * 100. / 96.), DXGI_COLOR_SPACE_RESERVED);
 	}
 
 	return TRUE;
+}
+
+static std::wstring ColorSpaceToStr(DXGI_COLOR_SPACE_TYPE ColorSpace)
+{
+	std::wstring str;
+#define UNPACK_VALUE(VALUE) case VALUE: str = L#VALUE; break;
+	switch (ColorSpace) {
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P709);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_FULL_G22_NONE_P709_X601);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P601);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P601);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P709);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_FULL_G22_LEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 );
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_LEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_STUDIO_G2084_NONE_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_TOPLEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G2084_TOPLEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_GHLG_TOPLEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_FULL_GHLG_TOPLEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_STUDIO_G24_NONE_P709);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_STUDIO_G24_NONE_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G24_LEFT_P709);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G24_LEFT_P2020);
+		UNPACK_VALUE(DXGI_COLOR_SPACE_YCBCR_STUDIO_G24_TOPLEFT_P2020);
+		default:
+			str = std::to_wstring(static_cast<int>(ColorSpace));
+	};
+#undef UNPACK_VALUE
+
+	return str;
 }
 
 int main()
@@ -56,12 +101,38 @@ int main()
 		EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
 	}
 
+	ComPtr<IDXGIFactory> pIDXGIFactory;
+	if (SUCCEEDED(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(pIDXGIFactory.GetAddressOf())))) {
+		ComPtr<IDXGIAdapter> pIDXGIAdapter;
+		for (UINT adapter = 0; pIDXGIFactory->EnumAdapters(adapter, pIDXGIAdapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++adapter) {
+			ComPtr<IDXGIOutput> pIDXGIOutput;
+			for (UINT output = 0; pIDXGIAdapter->EnumOutputs(output, pIDXGIOutput.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++output) {
+				ComPtr<IDXGIOutput6> output6;
+				if (SUCCEEDED(pIDXGIOutput.As(&output6))) {
+					DXGI_OUTPUT_DESC1 desc;
+					if (SUCCEEDED(output6->GetDesc1(&desc))) {
+						if (auto it = monitors.find(desc.DeviceName); it != monitors.end()) {
+							it->second.second = desc.ColorSpace;
+						} else {
+							monitors.try_emplace(desc.DeviceName, 0, desc.ColorSpace);
+						}
+					}
+				}
+			}
+		}
+	}
+
 	std::vector<DisplayConfig_t> displayConfigs;
 	if (GetDisplayConfigs(displayConfigs)) {
 		for (const auto& config : displayConfigs) {
 			auto str = L"\r\nDisplay: " + DisplayConfigToString(config);
 			if (auto it = monitors.find(config.displayName); it != monitors.end()) {
-				str.append(std::format(L", DPI scaling factor: {}%", it->second));
+				if (it->second.second != DXGI_COLOR_SPACE_RESERVED) {
+					str.append(std::format(L", Color Space: {}", ColorSpaceToStr(it->second.second)));
+				}
+				if (it->second.first) {
+					str.append(std::format(L"\n         DPI scaling factor: {}%", it->second.first));
+				}
 			}
 			std::wcout << str << std::endl;
 			if (config.bitsPerChannel) {
