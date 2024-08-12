@@ -25,7 +25,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(STATIC_CRT "Static runtime" ON)
 
 add_executable(${PROJECT_NAME} DisplayInfo.cpp "${CMAKE_CURRENT_SOURCE_DIR}/DisplayConfig/DisplayConfig.cpp")
-target_link_libraries(${PROJECT_NAME} PRIVATE Shcore)
+target_link_libraries(${PROJECT_NAME} PRIVATE Shcore dxgi)
 
 if(MSVC)
     if(STATIC_CRT)

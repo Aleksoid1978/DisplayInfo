@@ -12,8 +12,6 @@
 #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
 
-#pragma comment(lib, "dxgi.lib")
-
 static OSVERSIONINFOEXW GetWindowVersion()
 {
 	OSVERSIONINFOEXW osInfo = { sizeof(osInfo) };
@@ -57,7 +55,7 @@ static BOOL CALLBACK EnumProc(HMONITOR hMonitor, HDC, LPRECT, LPARAM)
 static std::wstring ColorSpaceToStr(DXGI_COLOR_SPACE_TYPE ColorSpace)
 {
 	std::wstring str;
-#define UNPACK_VALUE(VALUE) case VALUE: str = L#VALUE; break;
+#define UNPACK_VALUE(VALUE) case VALUE: str = L"" #VALUE; break;
 	switch (ColorSpace) {
 		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
 		UNPACK_VALUE(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
