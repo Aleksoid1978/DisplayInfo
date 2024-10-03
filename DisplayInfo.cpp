@@ -12,31 +12,6 @@
 #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
 
-static OSVERSIONINFOEXW GetWindowVersion()
-{
-	OSVERSIONINFOEXW osInfo = { sizeof(osInfo) };
-	typedef NTSTATUS(WINAPI* PFN_RtlGetVersion)(PRTL_OSVERSIONINFOEXW);
-	static auto pRtlGetVersion = reinterpret_cast<PFN_RtlGetVersion>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion"));
-	if (pRtlGetVersion) {
-		pRtlGetVersion(&osInfo);
-	}
-
-	return osInfo;
-}
-static auto osInfo = GetWindowVersion();
-
-namespace SysVersion {
-	static bool IsWin81orLater() {
-		static auto bIsWin81orLater = osInfo.dwMajorVersion > 6 || (osInfo.dwMajorVersion == 6 && osInfo.dwMinorVersion == 3);
-		return bIsWin81orLater;
-	}
-
-	static const bool IsWin10_1607orLater() {
-		static auto bIsWin10_1607orLater = osInfo.dwMajorVersion > 10 || (osInfo.dwMajorVersion == 10 && osInfo.dwBuildNumber >= 14393);
-		return bIsWin10_1607orLater;
-	}
-}
-
 std::map<std::wstring, std::pair<long, DXGI_COLOR_SPACE_TYPE>> monitors;
 
 static BOOL CALLBACK EnumProc(HMONITOR hMonitor, HDC, LPRECT, LPARAM)
@@ -89,12 +64,28 @@ static std::wstring ColorSpaceToStr(DXGI_COLOR_SPACE_TYPE ColorSpace)
 	return str;
 }
 
+static std::wstring ColorModeToStr(DISPLAYCONFIG_ADVANCED_COLOR_MODE ColorMode)
+{
+	std::wstring str;
+#define UNPACK_VALUE(VALUE) case VALUE: str = L"" #VALUE; break;
+	switch (ColorMode) {
+		UNPACK_VALUE(DISPLAYCONFIG_ADVANCED_COLOR_MODE_SDR);
+		UNPACK_VALUE(DISPLAYCONFIG_ADVANCED_COLOR_MODE_WCG);
+		UNPACK_VALUE(DISPLAYCONFIG_ADVANCED_COLOR_MODE_HDR);
+		default:
+			str = std::to_wstring(static_cast<int>(ColorMode));
+	};
+#undef UNPACK_VALUE
+
+	return str;
+}
+
 int main()
 {
-	if (SysVersion::IsWin10_1607orLater()) {
+	if (SysVersion::IsWin10_1607OrGreater()) {
 		SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 		EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
-	} else if (SysVersion::IsWin81orLater()) {
+	} else if (SysVersion::IsWin81OrGreater()) {
 		SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 		EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
 	}
@@ -137,13 +128,25 @@ int main()
 				const wchar_t* colenc = ColorEncodingToString(config.colorEncoding);
 				if (colenc) {
 					str = std::format(L"  Color: {} {}-bit", colenc, config.bitsPerChannel);
-					if (config.advancedColor.HDRSupported()) {
+					if (config.HDRSupported()) {
 						str.append(L", HDR10: ");
-						str.append(config.advancedColor.HDREnabled() ? L"on" : L"off");
+						str.append(config.HDREnabled() ? L"on" : L"off");
 
-						str.append(std::format(L"\r\n         Advanced Color : supported - {}, enabled - {}, wide enforced - {}, force disabled - {}",
-											   config.advancedColor.advancedColorSupported, config.advancedColor.advancedColorEnabled,
-											   config.advancedColor.wideColorEnforced, config.advancedColor.advancedColorForceDisabled));
+						if (SysVersion::IsWin11_24H2OrGreater()) {
+							auto& colors = config.windows1124H2Colors;
+							str.append(std::format(L"\r\n         Advanced Color: Supported: {}, Active: {}, Limited by OS policy: {}, HDR is supported: {}",
+												   colors.advancedColorSupported, colors.advancedColorActive,
+												   colors.advancedColorLimitedByPolicy, colors.highDynamicRangeSupported));
+							str.append(std::format(L"\r\n                         HDR enabled: {}, Wide supported: {}, Wide enabled: {}",
+												   colors.highDynamicRangeUserEnabled, colors.wideColorSupported,
+												   colors.wideColorUserEnabled));
+							str.append(std::format(L"\r\n                         Display color mode: {}", ColorModeToStr(colors.activeColorMode)));
+						} else {
+							auto& colors = config.advancedColor;
+							str.append(std::format(L"\r\n         Advanced Color: Supported: {}, Enabled: {}, Wide forced: {}, Force disabled: {}",
+												   colors.advancedColorSupported, colors.advancedColorEnabled,
+												   colors.wideColorEnforced, colors.advancedColorForceDisabled));
+						}
 					}
 
 					std::wcout << str << std::endl;
