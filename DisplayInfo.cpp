@@ -12,7 +12,13 @@
 #include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
 
-std::map<std::wstring, std::pair<long, DXGI_COLOR_SPACE_TYPE>> monitors;
+struct monitor_t {
+	long dpi;
+	DXGI_COLOR_SPACE_TYPE colorSpace;
+	FLOAT maxLuminance;
+};
+
+std::map<std::wstring, monitor_t> monitors;
 
 static BOOL CALLBACK EnumProc(HMONITOR hMonitor, HDC, LPRECT, LPARAM)
 {
@@ -21,7 +27,7 @@ static BOOL CALLBACK EnumProc(HMONITOR hMonitor, HDC, LPRECT, LPARAM)
 
 	UINT dpiX, dpiY;
 	if (S_OK == GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY)) {
-		monitors.try_emplace(monitorInfoEx.szDevice, std::lround(dpiY * 100. / 96.), DXGI_COLOR_SPACE_RESERVED);
+		monitors.try_emplace(monitorInfoEx.szDevice, monitor_t{ std::lround(dpiY * 100. / 96.), DXGI_COLOR_SPACE_RESERVED, 0.f });
 	}
 
 	return TRUE;
@@ -84,11 +90,11 @@ int main()
 {
 	if (SysVersion::IsWin10_1607OrGreater()) {
 		SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-		EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
 	} else if (SysVersion::IsWin81OrGreater()) {
 		SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-		EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
 	}
+
+	EnumDisplayMonitors(nullptr, nullptr, EnumProc, 0);
 
 	ComPtr<IDXGIFactory> pIDXGIFactory;
 	if (SUCCEEDED(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(pIDXGIFactory.GetAddressOf())))) {
@@ -101,9 +107,10 @@ int main()
 					DXGI_OUTPUT_DESC1 desc;
 					if (SUCCEEDED(output6->GetDesc1(&desc))) {
 						if (auto it = monitors.find(desc.DeviceName); it != monitors.end()) {
-							it->second.second = desc.ColorSpace;
+							it->second.colorSpace = desc.ColorSpace;
+							it->second.maxLuminance = desc.MaxLuminance;
 						} else {
-							monitors.try_emplace(desc.DeviceName, 0, desc.ColorSpace);
+							monitors.try_emplace(desc.DeviceName, monitor_t{ 0, desc.ColorSpace, desc.MaxLuminance });
 						}
 					}
 				}
@@ -116,11 +123,15 @@ int main()
 		for (const auto& config : displayConfigs) {
 			auto str = L"\r\nDisplay: " + DisplayConfigToString(config);
 			if (auto it = monitors.find(config.displayName); it != monitors.end()) {
-				if (it->second.second != DXGI_COLOR_SPACE_RESERVED) {
-					str.append(std::format(L", Color Space: {}", ColorSpaceToStr(it->second.second)));
+				auto& monitor = it->second;
+				if (monitor.colorSpace != DXGI_COLOR_SPACE_RESERVED) {
+					str.append(std::format(L", Color Space: {}", ColorSpaceToStr(monitor.colorSpace)));
 				}
-				if (it->second.first) {
-					str.append(std::format(L"\n         DPI scaling factor: {}%", it->second.first));
+				if (monitor.maxLuminance > 100.f) {
+					str.append(std::format(L", Max Luminance: {}", monitor.maxLuminance));
+				}
+				if (monitor.dpi) {
+					str.append(std::format(L"\n         DPI scaling factor: {}%", monitor.dpi));
 				}
 			}
 			std::wcout << str << std::endl;
